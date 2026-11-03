@@ -19,7 +19,10 @@ KIDS = os.path.join('motor_asset_re', 'KIDS_PLATFORM_OUNCE')
 UI_FDATA = '0x00011c54.fdata'          # pacote da interface (índice 0 no root.rdx)
 TARGET_FDATA, TARGET_INDEX = '0x4b13d561.fdata', 0x10  # pacote pequeno onde as texturas novas são anexadas
 ATLAS_KTID, ATLAS_TEX = 0xbc2c37f5, 18  # atlas dos ícones de botão
-TITLE_KTID = 0x79c6dd0e                 # tela de título em inglês ("PRESS Ⓐ BUTTON"; o PT-BR traduz esta)
+# telas de título com o botão desenhado, uma por idioma (o PT-BR traduz a inglesa, 79c6dd0e)
+TITLES = {0x79c6dd0e: 'inglês', 0x8cf3f714: 'japonês', 0x3b2bfdc7: 'francês', 0xb9476ce8: 'alemão',
+          0x63206026: 'italiano', 0x7b934558: 'espanhol'}
+TITLE_KTID = 0x79c6dd0e
 NAMES = {'steamdeck': 'Steam Deck', 'xbox': 'Xbox', 'playstation': 'PlayStation'}
 FONTS = ['/usr/share/fonts/noto/NotoSans-Bold.ttf', '/usr/local/share/fonts/noto/NotoSans-Bold.ttf',
          '/usr/share/fonts/TTF/DejaVuSans-Bold.ttf', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
@@ -108,14 +111,15 @@ def build(game, base, variant, out_root, font):
         f.seek(e['offset'] + 0x30); params = f.read(e['entry_size'] - e['comp_size'] - 0x30)
     append_and_redirect(kids_out, ATLAS_KTID, new_atlas, params, e)
 
-    # tela de título (a do base, se houver: o PT-BR traduz esta textura)
-    title = read_by_rdb(src_kids, TITLE_KTID)
-    tt = g.parse(title)[0]
-    new_title = encode_into(title, 0, glyphs.remap_title(g.decode(title, tt).convert('RGBA'), variant, font))
-    e = entry_of(ui, TITLE_KTID)
-    with open(ui, 'rb') as f:
-        f.seek(e['offset'] + 0x30); params = f.read(e['entry_size'] - e['comp_size'] - 0x30)
-    append_and_redirect(kids_out, TITLE_KTID, new_title, params, e)
+    # telas de título (a do base, se houver: o PT-BR traduz a inglesa)
+    for ktid in TITLES:
+        title = read_by_rdb(src_kids, ktid)
+        tt = g.parse(title)[0]
+        new_title = encode_into(title, 0, glyphs.remap_title(g.decode(title, tt).convert('RGBA'), variant, font))
+        e = entry_of(ui, ktid)
+        with open(ui, 'rb') as f:
+            f.seek(e['offset'] + 0x30); params = f.read(e['entry_size'] - e['comp_size'] - 0x30)
+        append_and_redirect(kids_out, ktid, new_title, params, e)
     print(f'ok: {out}')
     return out
 
@@ -160,9 +164,10 @@ def build_inplace(game, variant, out_root, font):
     atlas = kt_scan.read_data(ui_src, entry_of(ui_src, ATLAS_KTID))
     im = g.decode(atlas, g.parse(atlas)[ATLAS_TEX]).convert('RGBA')
     patch_in_place(ui, ATLAS_KTID, encode_into(atlas, ATLAS_TEX, glyphs.remap_atlas(im, variant, font)))
-    title = kt_scan.read_data(ui_src, entry_of(ui_src, TITLE_KTID))
-    tim = g.decode(title, g.parse(title)[0]).convert('RGBA')
-    patch_in_place(ui, TITLE_KTID, encode_into(title, 0, glyphs.remap_title(tim, variant, font)))
+    for ktid, lang in TITLES.items():
+        title = kt_scan.read_data(ui_src, entry_of(ui_src, ktid))
+        tim = g.decode(title, g.parse(title)[0]).convert('RGBA')
+        patch_in_place(ui, ktid, encode_into(title, 0, glyphs.remap_title(tim, variant, font)))
     print(f'ok: {out}')
     return out
 

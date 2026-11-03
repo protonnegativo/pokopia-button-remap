@@ -25,7 +25,7 @@ o B, e assim por diante. Só que as letras mudam de lugar entre os consoles:
 O mod troca:
 
 - o **atlas de ícones do HUD e das dicas** (`bc2c37f5`, textura 18 — 1024×1024);
-- o botão desenhado na **tela de título** (`79c6dd0e`, "PRESS Ⓐ BUTTON" / "APERTE O BOTÃO Ⓐ").
+- o botão desenhado nas **telas de título** de todos os idiomas (inglês, japonês, francês, alemão, italiano e espanhol).
 
 ## Requisitos
 
