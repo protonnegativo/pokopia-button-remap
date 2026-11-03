@@ -49,6 +49,19 @@ python3 tools/build_mod.py --game "/caminho/do/romfs" --variant steamdeck \
 
 Cada variante vira uma pasta, por exemplo `build/Botoes Steam Deck/romfs/...`.
 
+### Modo "no lugar" (recomendado para distribuir): funciona com ou sem a tradução
+
+```bash
+python3 tools/build_mod.py --game "/caminho/do/romfs" --variant all --inplace --out build/
+```
+
+Em vez de relocar o atlas pelo `root.rdb`, regrava os ícones **no mesmo lugar** dentro do pacote da interface
+(`0x00011c54.fdata`). A versão editada, comprimida, cabe no espaço da original; o resto é completado com zeros,
+os 8 bytes de cada bloco são mantidos e o 1º parâmetro (CRC32 dos dados gravados) é atualizado. Como não mexe no
+`root.rdb`, pode ficar ativo **junto com o mod PT-BR**. A pasta gerada fica com ~140 MB (o pacote inteiro).
+
+Limitação: com a tradução PT-BR ativa, a tela de título usa a imagem da tradução e continua com o Ⓐ.
+
 O mod PT-BR usado como base é o [pokemon-pokopia-pt-br](https://github.com/LucianoNeo/pokemon-pokopia-pt-br),
 de LucianoNeo (v2.5.0). O script lê a tradução da pasta que você indicar; nada dela é distribuído aqui.
 

@@ -120,6 +120,53 @@ def build(game, base, variant, out_root, font):
     return out
 
 
+def patch_in_place(fdata_path, ktid, new_data):
+    """Regrava o arquivo comprimido no MESMO lugar do .fdata, sem mexer no root.rdb.
+
+    Usa blocos zlib de 16 KB como o original, reaproveita os 8 bytes de cada bloco, completa com zeros até o
+    tamanho original (o leitor para ao atingir o tamanho descomprimido) e atualiza o 1º parâmetro, que nos
+    registros comprimidos é o CRC32 dos dados gravados. Assim o registro mantém posição e tamanho.
+    """
+    e = entry_of(fdata_path, ktid)
+    assert e['comp_size'] != e['file_size'], 'registro original não é comprimido'
+    assert len(new_data) == e['file_size'], 'tamanho descomprimido diferente do original'
+    with open(fdata_path, 'r+b') as f:
+        f.seek(e['data_off']); stored = f.read(e['comp_size'])
+        extras, pos = [], 0
+        while len(extras) * 16384 < e['file_size']:
+            zs = struct.unpack_from('<H', stored, pos)[0]
+            extras.append(stored[pos + 2:pos + 10]); pos += 10 + zs
+        out = bytearray()
+        for i, extra in enumerate(extras):
+            c = zlib.compress(new_data[i * 16384:(i + 1) * 16384], 9)
+            out += struct.pack('<H', len(c)) + extra + c
+        if len(out) > e['comp_size']:
+            raise SystemExit(f'{ktid:08x}: não cabe no lugar ({len(out)} > {e["comp_size"]})')
+        out += b'\0' * (e['comp_size'] - len(out))
+        f.seek(e['data_off']); f.write(out)
+        f.seek(e['offset'] + 0x30); f.write(struct.pack('<I', zlib.crc32(bytes(out))))
+    assert kt_scan.read_data(fdata_path, entry_of(fdata_path, ktid)) == new_data  # conferência
+
+
+def build_inplace(game, variant, out_root, font):
+    """Versão que só substitui o pacote da interface: funciona com ou sem o mod PT-BR (não toca no root.rdb)."""
+    game_kids = os.path.join(game, KIDS)
+    out = os.path.join(out_root, f'Botoes {NAMES[variant]}')
+    if os.path.exists(out):
+        shutil.rmtree(out)
+    kids_out = os.path.join(out, 'romfs', KIDS); os.makedirs(kids_out)
+    ui_src = os.path.join(game_kids, UI_FDATA); ui = os.path.join(kids_out, UI_FDATA)
+    shutil.copy2(ui_src, ui)
+    atlas = kt_scan.read_data(ui_src, entry_of(ui_src, ATLAS_KTID))
+    im = g.decode(atlas, g.parse(atlas)[ATLAS_TEX]).convert('RGBA')
+    patch_in_place(ui, ATLAS_KTID, encode_into(atlas, ATLAS_TEX, glyphs.remap_atlas(im, variant, font)))
+    title = kt_scan.read_data(ui_src, entry_of(ui_src, TITLE_KTID))
+    tim = g.decode(title, g.parse(title)[0]).convert('RGBA')
+    patch_in_place(ui, TITLE_KTID, encode_into(title, 0, glyphs.remap_title(tim, variant, font)))
+    print(f'ok: {out}')
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--game', required=True, help='pasta romfs do jogo (a que tem motor_asset_re/)')
@@ -127,6 +174,7 @@ def main():
     ap.add_argument('--out', required=True)
     ap.add_argument('--base', help='pasta do mod PT-BR (a que tem romfs/) para combinar')
     ap.add_argument('--font', help='fonte .ttf em negrito para os rótulos')
+    ap.add_argument('--inplace', action='store_true', help='só substitui o pacote da interface (funciona junto com o PT-BR)')
     a = ap.parse_args()
     font = a.font or next((f for f in FONTS if os.path.exists(f)), None)
     if not font:
@@ -134,7 +182,10 @@ def main():
     if not os.path.isdir(os.path.join(a.game, KIDS)):
         raise SystemExit(f'{a.game} não tem {KIDS}: aponte para a pasta romfs do jogo')
     for v in (['steamdeck', 'xbox', 'playstation'] if a.variant == 'all' else [a.variant]):
-        build(a.game, a.base, v, a.out, font)
+        if a.inplace:
+            build_inplace(a.game, v, a.out, font)
+        else:
+            build(a.game, a.base, v, a.out, font)
 
 
 if __name__ == '__main__':
